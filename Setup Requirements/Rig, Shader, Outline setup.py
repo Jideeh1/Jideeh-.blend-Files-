@@ -1869,11 +1869,11 @@ if "SknHighlights.R" in faceobj.vertex_groups: # check if eyehighlights (new cha
     eyehighlight()
     
 if ver == 3:
-    bpy.ops.armature.armature_layers(layers=(False, True, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False))
+    bpy.ops.armature.armature_layers(layers=(False, True, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, Falrse, False, False, False, False, False, False, False, False, False))
 
 bpy.ops.object.mode_set(mode='OBJECT')
 for a in bpy.data.objects:
-    if a.type == 'MESH' and a.name.lower().endswith('_face') and "weapon_" not in a.name.lower() and "gun_" not in a.name.lower(): # gdi orphie:
+    if a.type == 'MESH' and a.name.lower().endswith('_face') and "weapon_" not in a.name.lower() and "gun_" not in a.name.lower(): # gdi r:
         obj = a 
 
 obj.vertex_groups.new(name="No OL")
