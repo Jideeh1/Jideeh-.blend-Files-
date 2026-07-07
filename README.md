@@ -45,7 +45,7 @@ Check here to see what it does.
 
 Credits to the lovely people here who have made the ZZZ setup file. https://discord.com/channels/894925535870865498/1439443691142910077, and credits to @jrdan_ & @starriia for teaching me how to setup models. Give their repositories lots of love! [Star's Repository](<https://github.com/starriia/stars-blend-files>) | [Jordan's Repository](<https://mega.nz/folder/27hnRR6Q#JbVN0z1hKitbKq-6R0dOlg>).
 
-## What the button does:
+## What each buttons do:
 * **Better  FBX Importer:** Uses the betterFBX addon and allows you to import game models accurately while optimizing your model.
 * **Rig, Outline, Shaders:** Is the same script that https://discord.com/channels/894925535870865498/1439443691142910077 uses. As the name suggests, this generates the rig, outline, and shaders of the model.
 * **Jideeh's Setup:**  This button lets you setup your blend file for animation renders. This does the following:
