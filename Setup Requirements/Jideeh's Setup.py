@@ -1,5 +1,4 @@
 import bpy
-import math
 
 bone_collections_off = [
     "Light Panel",
@@ -58,18 +57,9 @@ common_arm_property_bones = [
 
 extra_fx_modifier_name = "Extra FX"
 extra_fx_node_tree_name = "Extra FX Geonode"
-
-extra_fx_slider_values = {
-    "blend(Off/On)": 0.0,
-    "face shadow(Off/On)": 1.0,
-    "shadowsharpness": 1.090,
-}
-
+face_shadow_input_name = "face shadow(off/on)"
 combine_uv_node_name = "combine uv"
 combine_uv_invert_input_name = "invert"
-
-light_direction_location = (0.520026, -0.017764, 1.5321)
-light_direction_rotation_degrees = (303.617, -91.7351, -269.386)
 
 def normalize_name(name):
     return "".join(character.lower() for character in str(name) if character.isalnum())
@@ -105,42 +95,6 @@ def is_body_1_mesh_object(obj):
     base_name = strip_blender_numeric_suffix(obj.name).lower()
 
     return base_name.endswith("_body_1")
-
-def is_light_direction_object(obj):
-    object_name = strip_blender_numeric_suffix(obj.name).lower()
-    data_name = ""
-
-    if obj.data is not None:
-        data_name = strip_blender_numeric_suffix(obj.data.name).lower()
-
-    if object_name.endswith(" light direction"):
-        return True
-
-    if data_name.endswith(" light direction"):
-        return True
-
-    return False
-
-def update_light_direction_objects():
-    updated_objects = []
-
-    for obj in bpy.data.objects:
-        if is_light_direction_object(obj):
-            obj.location = light_direction_location
-            obj.rotation_mode = "XYZ"
-            obj.rotation_euler = (
-                math.radians(light_direction_rotation_degrees[0]),
-                math.radians(light_direction_rotation_degrees[1]),
-                math.radians(light_direction_rotation_degrees[2]),
-            )
-            updated_objects.append(obj.name)
-
-    try:
-        bpy.context.view_layer.update()
-    except Exception:
-        pass
-
-    return updated_objects
 
 def is_metarig_object(obj):
     if obj.type != "ARMATURE":
@@ -239,38 +193,6 @@ def get_pose_bones_from_collection(armature_obj, collection_name):
 
     return pose_bones
 
-def add_camera_to_scene_collection():
-    scene = bpy.context.scene
-    existing_cameras = [obj for obj in bpy.data.objects if obj.type == "CAMERA"]
-
-    if existing_cameras:
-        camera_obj = existing_cameras[0]
-    else:
-        camera_data = bpy.data.cameras.new("Camera")
-        camera_obj = bpy.data.objects.new("Camera", camera_data)
-
-    if scene.collection not in camera_obj.users_collection:
-        scene.collection.objects.link(camera_obj)
-
-    for collection in list(camera_obj.users_collection):
-        if collection != scene.collection:
-            collection.objects.unlink(camera_obj)
-
-    camera_obj.name = "Camera"
-    camera_obj.data.name = "Camera"
-
-    camera_obj.location = (1.50661, -4.6511, 0.9646)
-    camera_obj.rotation_euler = (
-        math.radians(88.3172),
-        math.radians(-0.000005),
-        math.radians(11.6211),
-    )
-    camera_obj.data.passepartout_alpha = 0.85
-
-    scene.camera = camera_obj
-
-    return camera_obj
-
 def disable_body_outline_modifier():
     updated_objects = []
     missing_modifier_objects = []
@@ -310,21 +232,21 @@ def modifier_matches_extra_fx(modifier):
 
     return False
 
-def get_value_for_socket_type(socket_type, requested_value):
+def get_socket_value_for_type(socket_type):
     if socket_type in {"NodeSocketFloat", "NodeSocketFloatFactor", "NodeSocketFloatPercentage", "NodeSocketFloatDistance", "NodeSocketFloatAngle", "NodeSocketFloatTime", "NodeSocketFloatTimeAbsolute"}:
-        return float(requested_value)
+        return 1.0
 
     if socket_type == "NodeSocketBool":
-        return bool(requested_value)
+        return True
 
     if socket_type in {"NodeSocketInt", "NodeSocketIntFactor", "NodeSocketIntPercentage"}:
-        return int(round(float(requested_value)))
+        return 1
 
-    return float(requested_value)
+    return 1.0
 
-def get_extra_fx_socket_items(node_group, input_name):
+def get_face_shadow_socket_items(node_group):
     socket_items = []
-    target_name = normalize_name(input_name)
+    target_name = normalize_name(face_shadow_input_name)
 
     if hasattr(node_group, "interface") and hasattr(node_group.interface, "items_tree"):
         for item in node_group.interface.items_tree:
@@ -353,19 +275,19 @@ def get_extra_fx_socket_items(node_group, input_name):
 
     return socket_items
 
-def set_extra_fx_slider_on_modifier(modifier, input_name, requested_value):
+def set_face_shadow_on_modifier(modifier):
     if modifier.node_group is None:
         return False, []
 
     updated = []
-    socket_items = get_extra_fx_socket_items(modifier.node_group, input_name)
+    socket_items = get_face_shadow_socket_items(modifier.node_group)
 
     for identifier, socket_name, socket_type in socket_items:
-        value = get_value_for_socket_type(socket_type, requested_value)
+        value = get_socket_value_for_type(socket_type)
 
         try:
             modifier[identifier] = value
-            updated.append(f"{socket_name} -> {identifier} = {value}")
+            updated.append(f"{identifier} = {value}")
         except Exception as error:
             print(f"Could not set {socket_name} using {identifier}: {error}")
 
@@ -385,20 +307,6 @@ def set_extra_fx_slider_on_modifier(modifier, input_name, requested_value):
         pass
 
     return len(updated) > 0, updated
-
-def set_extra_fx_sliders_on_modifier(modifier):
-    updated = []
-    missing = []
-
-    for input_name, requested_value in extra_fx_slider_values.items():
-        was_updated, updates = set_extra_fx_slider_on_modifier(modifier, input_name, requested_value)
-
-        if was_updated:
-            updated.extend(updates)
-        else:
-            missing.append(input_name)
-
-    return len(updated) > 0, updated, missing
 
 def print_modifier_debug_info(obj, modifier):
     print("Debug info for Geometry Nodes modifier:")
@@ -436,10 +344,10 @@ def print_modifier_debug_info(obj, modifier):
             socket_type = getattr(socket, "bl_socket_idname", "")
             print(f"{index} | {socket_name} | {socket_identifier} | {socket_type}")
 
-def update_face_extra_fx_sliders():
+def enable_face_shadow_extra_fx():
     face_objects_found = []
     matching_modifiers_found = []
-    updated_extra_fx_sliders = []
+    updated_face_shadow = []
     missing_modifier_objects = []
     missing_input_modifiers = []
 
@@ -457,16 +365,12 @@ def update_face_extra_fx_sliders():
 
             for modifier in matching_modifiers:
                 matching_modifiers_found.append(f"{obj.name} -> {modifier.name}")
-                updated, updates, missing_inputs = set_extra_fx_sliders_on_modifier(modifier)
+                updated, updates = set_face_shadow_on_modifier(modifier)
 
                 if updated:
-                    for update in updates:
-                        updated_extra_fx_sliders.append(f"{obj.name} -> {modifier.name} -> {update}")
-
-                if missing_inputs:
-                    missing_input_modifiers.append(f"{obj.name} -> {modifier.name} -> missing: {', '.join(missing_inputs)}")
-
-                if missing_inputs:
+                    updated_face_shadow.append(f"{obj.name} -> {modifier.name} -> {', '.join(updates)}")
+                else:
+                    missing_input_modifiers.append(f"{obj.name} -> {modifier.name}")
                     print_modifier_debug_info(obj, modifier)
 
     try:
@@ -474,7 +378,7 @@ def update_face_extra_fx_sliders():
     except Exception:
         pass
 
-    return face_objects_found, matching_modifiers_found, updated_extra_fx_sliders, missing_modifier_objects, missing_input_modifiers
+    return face_objects_found, matching_modifiers_found, updated_face_shadow, missing_modifier_objects, missing_input_modifiers
 
 def node_matches_combine_uv(node):
     target_name = normalize_name(combine_uv_node_name)
@@ -680,15 +584,9 @@ scene = bpy.context.scene
 scene.render.fps = 24
 scene.frame_end = 250
 scene.render.use_border = True
-scene.render.resolution_x = 1920
-scene.render.resolution_y = 1080
-scene.render.resolution_percentage = 100
-
-camera_obj = add_camera_to_scene_collection()
-updated_light_direction_objects = update_light_direction_objects()
 
 outline_updated_objects, outline_missing_modifier_objects, body_objects_found = disable_body_outline_modifier()
-face_objects_found, extra_fx_modifiers_found, extra_fx_sliders_updated, face_missing_modifier_objects, face_missing_input_modifiers = update_face_extra_fx_sliders()
+face_objects_found, extra_fx_modifiers_found, face_shadow_updated_modifiers, face_missing_modifier_objects, face_missing_input_modifiers = enable_face_shadow_extra_fx()
 body_material_objects_found, body_materials_checked, combine_uv_nodes_found, combine_uv_invert_updated, body_missing_material_objects, body_missing_node_materials, combine_uv_missing_invert_inputs = set_body_material_combine_uv_invert_to_zero()
 
 armature = armature_obj.data
@@ -735,13 +633,6 @@ if hidden_head_direction_objects:
 else:
     print("No Head Direction objects found.")
 
-if updated_light_direction_objects:
-    print("Light Direction objects updated:")
-    for object_name in updated_light_direction_objects:
-        print(object_name)
-else:
-    print("No object or data ending with Light Direction was found.")
-
 if missing_collections:
     print("These bone collections were not found:")
     for collection_name in missing_collections:
@@ -787,12 +678,12 @@ if extra_fx_modifiers_found:
 else:
     print("No matching Extra FX Geonode modifier was found on any _face or _Face mesh.")
 
-if extra_fx_sliders_updated:
-    print("Extra FX sliders updated:")
-    for update in extra_fx_sliders_updated:
-        print(update)
+if face_shadow_updated_modifiers:
+    print("face shadow(off/on) was set on:")
+    for modifier_name in face_shadow_updated_modifiers:
+        print(modifier_name)
 else:
-    print("No Extra FX sliders were updated.")
+    print("face shadow(off/on) was not updated on any matching Extra FX Geonode modifier.")
 
 if face_missing_modifier_objects:
     print("These _face or _Face meshes did not have the matching Extra FX Geonode modifier:")
@@ -800,7 +691,7 @@ if face_missing_modifier_objects:
         print(object_name)
 
 if face_missing_input_modifiers:
-    print("These matching Extra FX Geonode modifiers were missing one or more target sliders:")
+    print("These matching Extra FX Geonode modifiers did not expose a face shadow(off/on) input:")
     for modifier_name in face_missing_input_modifiers:
         print(modifier_name)
 
@@ -849,9 +740,4 @@ print("Bone collection visibility updated.")
 print("Frame rate set to 24 fps.")
 print("Frame range end set to 250.")
 print("Render Region enabled.")
-print("Resolution set to 1920 x 1080.")
-print("Camera added or reused in the scene collection.")
-print("Camera location, rotation, and passepartout updated.")
-print("Light Direction location and rotation updated.")
-print("Face Extra FX sliders updated.")
 print("Body material Combine UV invert sliders updated.")
