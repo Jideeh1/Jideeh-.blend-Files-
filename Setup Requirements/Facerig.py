@@ -32,12 +32,13 @@ COL_MOUTH   = (0.90, 0.20, 0.20)
 COL_CORNER  = (0.15, 0.85, 0.30)
 COL_VISEME  = (0.95, 0.85, 0.20)
 COL_EYELID  = (0.90, 0.15, 0.15)
-COL_EYEAIM  = (0.20, 0.85, 0.90)
+COL_EYEAIM  = (0.65, 0.35, 0.90)
 COL_EYEMOTE = (0.65, 0.35, 0.90)
 COL_BROW    = (0.30, 0.80, 0.35)
 COL_BROWSAD = (0.95, 0.45, 0.75)
 COL_EBRBONE = (0.20, 0.55, 0.95)
 COL_EBRMASTER = (0.95, 0.55, 0.10)
+COL_EYEGOGGLE = (0.20, 0.80, 0.35)
 
 HEAD_CANDIDATES = [
     "DEF-spine.006", "spine.006", "head", "Head", "Head_M", "head_M",
@@ -197,6 +198,19 @@ def skneyebrow_pos(armature, seg, side):
             if eyebrow_side(b.name) == side:
                 return armature.matrix_world @ b.head_local
     return None
+
+
+def find_eye_bones(armature):
+    res = {'control': None, 'L': None, 'R': None}
+    for b in armature.data.bones:
+        low = b.name.strip().lower()
+        if low in ("eye.l", "eye_l", "eye l"):
+            res['L'] = b.name
+        elif low in ("eye.r", "eye_r", "eye r"):
+            res['R'] = b.name
+        elif low in ("eye control", "eye_control", "eyecontrol", "eyes"):
+            res['control'] = b.name
+    return res
 
 
 def build_brow_shapekey_controls(mesh_obj, armature, fwd, up, face_size):
@@ -641,6 +655,42 @@ def make_widget(kind, coll):
             bot.append((x, 0.0, arch - ht))
         verts = top + [bot[i] for i in range(N - 1, 0, -1)]
         edges = [(i, (i + 1) % len(verts)) for i in range(len(verts))]
+    elif kind == 'goggles':
+        import math
+        verts = []
+        edges = []
+        seg = 16
+
+        def _ring(cx, r):
+            base = len(verts)
+            for i in range(seg):
+                a = 2 * math.pi * i / seg
+                verts.append((cx + r * math.cos(a), 0.0, r * math.sin(a)))
+            for i in range(seg):
+                edges.append((base + i, base + (i + 1) % seg))
+        _ring(-0.6, 0.42)
+        _ring(0.6, 0.42)
+        b = len(verts)
+        verts.append((-0.2, 0.0, 0.08))
+        verts.append((0.2, 0.0, 0.08))
+        edges.append((b, b + 1))
+        for sx in (-1.0, 1.0):
+            s = len(verts)
+            verts.append((sx * 1.02, 0.0, 0.05))
+            verts.append((sx * 1.35, 0.0, 0.16))
+            edges.append((s, s + 1))
+    elif kind == 'goggle_lens':
+        import math
+        seg = 18
+        verts = [(math.cos(2 * math.pi * i / seg) * 0.9, 0.0,
+                  math.sin(2 * math.pi * i / seg) * 0.9) for i in range(seg)]
+        edges = [(i, (i + 1) % seg) for i in range(seg)]
+    elif kind == 'oblong':
+        import math
+        seg = 28
+        verts = [(math.cos(2 * math.pi * i / seg) * 1.0, 0.0,
+                  math.sin(2 * math.pi * i / seg) * 0.4) for i in range(seg)]
+        edges = [(i, (i + 1) % seg) for i in range(seg)]
     else:
         verts, edges = [(0, 0, 0)], []
     mesh = bpy.data.meshes.new(name)
@@ -754,6 +804,50 @@ def setup_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size):
                              'shape_scale': Vector((face_size * EBR_WGT_F,) * 3),
                              'kind': 'fk', 'target_bone': name, 'parent': master_name,
                              'hook_name': ctrl_name + '_Hook', 'hook_head': head_world,
+                             'drivers': []})
+
+    eyeb = find_eye_bones(armature)
+    if eyeb['control'] or eyeb['L'] or eyeb['R']:
+        print("Eye bones detected: %s" % ", ".join(v for v in eyeb.values() if v))
+
+        def bpos(name):
+            b = armature.data.bones.get(name) if name else None
+            return armature.matrix_world @ b.head_local if b else None
+        pL, pR, pC = bpos(eyeb['L']), bpos(eyeb['R']), bpos(eyeb['control'])
+        if pL and pR:
+            sep = (pL - pR).length
+        else:
+            sep = face_size * 0.18
+        if pC is None:
+            if pL and pR:
+                pC = (pL + pR) * 0.5
+            else:
+                pC = pL or pR
+
+        master_name = None
+        if eyeb['control']:
+            master_name = 'CTRL-Eye-Goggles'
+            controls.append({'name': master_name, 'collection': FACERIG_COLLECTION,
+                             'color': COL_EYEGOGGLE, 'group': 'Face Eye',
+                             'head': pC + fwd * (face_size * OFFSET_F),
+                             'widget': 'oblong', 'lim': face_size * 0.05,
+                             'free': ('X', 'Y', 'Z'), 'range': 'both',
+                             'shape_scale': Vector((sep * 0.95,) * 3),
+                             'kind': 'fk', 'target_bone': eyeb['control'],
+                             'hook_name': 'CTRL-Eye-Goggles_Hook', 'hook_head': pC,
+                             'drivers': []})
+        for side, name, pos in (('L', eyeb['L'], pL), ('R', eyeb['R'], pR)):
+            if not name or pos is None:
+                continue
+            cn = 'CTRL-Eye.%s' % side
+            controls.append({'name': cn, 'collection': FACERIG_COLLECTION,
+                             'color': COL_EYEGOGGLE, 'group': 'Face Eye',
+                             'head': pos + fwd * (face_size * OFFSET_F),
+                             'widget': 'goggle_lens', 'lim': face_size * 0.05,
+                             'free': ('X', 'Y', 'Z'), 'range': 'both',
+                             'shape_scale': Vector((sep * 0.28,) * 3),
+                             'kind': 'fk', 'target_bone': name, 'parent': master_name,
+                             'hook_name': cn + '_Hook', 'hook_head': pos,
                              'drivers': []})
 
     bpy.context.view_layer.objects.active = armature
