@@ -5,6 +5,8 @@ SCRIPT_2_TEXT_NAME = "Jideeh's Setup"
 SCRIPT_3_TEXT_NAME = "Facerig"
 SCRIPT_4_TEXT_NAME = "Thugs Rig Script"
 SCRIPT_5_TEXT_NAME = "Face Panel Controllers"
+SCRIPT_6_TEXT_NAME = "Bangboo Rig"
+SCRIPT_7_TEXT_NAME = "Purge Empties"
 
 BETTER_FBX_OPERATOR_IDS = [
     "better_import.fbx",
@@ -18,16 +20,38 @@ BETTER_FBX_OPERATOR_IDS = [
 def disable_auto_keying():
     bpy.context.scene.tool_settings.use_keyframe_insert_auto = False
 
-def run_text_block(text_name):
+def strip_py_extension(name):
+    lowered = name.lower()
+
+    if lowered.endswith(".py"):
+        return lowered[:-3]
+
+    return lowered
+
+def find_text_block(text_name):
     text_block = bpy.data.texts.get(text_name)
+
+    if text_block is not None:
+        return text_block
+
+    target = strip_py_extension(text_name)
+
+    for text in bpy.data.texts:
+        if strip_py_extension(text.name) == target:
+            return text
+
+    return None
+
+def run_text_block(text_name):
+    text_block = find_text_block(text_name)
 
     if text_block is None:
         available_texts = [text.name for text in bpy.data.texts]
-        raise RuntimeError(f'Could not find a text block named "{text_name}". Available text blocks: {available_texts}')
+        raise RuntimeError(f'Could not find a text block named "{text_name}" (with or without a .py extension). Available text blocks: {available_texts}')
 
     namespace = {
         "__name__": "__main__",
-        "__file__": text_name,
+        "__file__": text_block.name,
         "bpy": bpy,
     }
 
@@ -129,22 +153,6 @@ class JIDEEH_OT_run_facerig(bpy.types.Operator):
             self.report({"ERROR"}, str(error))
             raise
 
-class JIDEEH_OT_run_thugs_rig_script(bpy.types.Operator):
-    bl_idname = "jideeh.run_thugs_rig_script"
-    bl_label = "Thugs Rig Script"
-    bl_options = {"REGISTER", "UNDO"}
-
-    def execute(self, context):
-        try:
-            disable_auto_keying()
-            run_text_block(SCRIPT_4_TEXT_NAME)
-            disable_auto_keying()
-            self.report({"INFO"}, f'Ran "{SCRIPT_4_TEXT_NAME}".')
-            return {"FINISHED"}
-        except Exception as error:
-            self.report({"ERROR"}, str(error))
-            raise
-
 class JIDEEH_OT_run_face_panel_controllers(bpy.types.Operator):
     bl_idname = "jideeh.run_face_panel_controllers"
     bl_label = "Face Panel Controllers"
@@ -161,6 +169,54 @@ class JIDEEH_OT_run_face_panel_controllers(bpy.types.Operator):
             self.report({"ERROR"}, str(error))
             raise
 
+class JIDEEH_OT_run_thugs_rig_script(bpy.types.Operator):
+    bl_idname = "jideeh.run_thugs_rig_script"
+    bl_label = "Thugs Rig"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        try:
+            disable_auto_keying()
+            run_text_block(SCRIPT_4_TEXT_NAME)
+            disable_auto_keying()
+            self.report({"INFO"}, f'Ran "{SCRIPT_4_TEXT_NAME}".')
+            return {"FINISHED"}
+        except Exception as error:
+            self.report({"ERROR"}, str(error))
+            raise
+
+class JIDEEH_OT_run_bangboo_rig(bpy.types.Operator):
+    bl_idname = "jideeh.run_bangboo_rig"
+    bl_label = "Bangboo Rig"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        try:
+            disable_auto_keying()
+            run_text_block(SCRIPT_6_TEXT_NAME)
+            disable_auto_keying()
+            self.report({"INFO"}, f'Ran "{SCRIPT_6_TEXT_NAME}".')
+            return {"FINISHED"}
+        except Exception as error:
+            self.report({"ERROR"}, str(error))
+            raise
+
+class JIDEEH_OT_run_remove_empties(bpy.types.Operator):
+    bl_idname = "jideeh.run_remove_empties"
+    bl_label = "Remove Empties"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        try:
+            disable_auto_keying()
+            run_text_block(SCRIPT_7_TEXT_NAME)
+            disable_auto_keying()
+            self.report({"INFO"}, f'Ran "{SCRIPT_7_TEXT_NAME}".')
+            return {"FINISHED"}
+        except Exception as error:
+            self.report({"ERROR"}, str(error))
+            raise
+
 class JIDEEH_PT_script_runner_panel(bpy.types.Panel):
     bl_label = "Jideeh Script Runner"
     bl_idname = "JIDEEH_PT_script_runner_panel"
@@ -170,21 +226,30 @@ class JIDEEH_PT_script_runner_panel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+
+        layout.label(text="Utilities:")
         layout.operator("jideeh.run_better_fbx_importer", text="Better FBX Importer")
-        layout.separator()
         layout.operator("jideeh.run_setup_shader_rig_outline", text="Rig, Outline, Shaders")
         layout.operator("jideeh.run_jideeh_setup", text="Jideeh's Setup")
+
+        layout.separator()
+
+        layout.label(text="Extras:")
         layout.operator("jideeh.run_facerig", text="Facerig")
-        layout.operator("jideeh.run_thugs_rig_script", text="Thugs Rig Script")
         layout.operator("jideeh.run_face_panel_controllers", text="Face Panel Controllers")
+        layout.operator("jideeh.run_thugs_rig_script", text="Thugs Rig")
+        layout.operator("jideeh.run_bangboo_rig", text="Bangboo Rig")
+        layout.operator("jideeh.run_remove_empties", text="Remove Empties")
 
 classes = (
     JIDEEH_OT_run_better_fbx_importer,
     JIDEEH_OT_run_setup_shader_rig_outline,
     JIDEEH_OT_run_jideeh_setup,
     JIDEEH_OT_run_facerig,
-    JIDEEH_OT_run_thugs_rig_script,
     JIDEEH_OT_run_face_panel_controllers,
+    JIDEEH_OT_run_thugs_rig_script,
+    JIDEEH_OT_run_bangboo_rig,
+    JIDEEH_OT_run_remove_empties,
     JIDEEH_PT_script_runner_panel,
 )
 
@@ -194,8 +259,10 @@ def enable_register_on_this_text():
         "jideeh.run_setup_shader_rig_outline",
         "jideeh.run_jideeh_setup",
         "jideeh.run_facerig",
-        "jideeh.run_thugs_rig_script",
         "jideeh.run_face_panel_controllers",
+        "jideeh.run_thugs_rig_script",
+        "jideeh.run_bangboo_rig",
+        "jideeh.run_remove_empties",
         "jideeh.run_better_fbx_importer",
     ]
 
