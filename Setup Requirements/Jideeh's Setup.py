@@ -1,4 +1,5 @@
 import bpy
+import math
 
 bone_collections_off = [
     "Light Panel",
@@ -60,6 +61,11 @@ extra_fx_node_tree_name = "Extra FX Geonode"
 face_shadow_input_name = "face shadow(off/on)"
 combine_uv_node_name = "combine uv"
 combine_uv_invert_input_name = "invert"
+shadow_sharpness_input_name = "shadow sharpness"
+shadow_sharpness_value = 1.09
+
+light_direction_location = (0.520026, -0.017764, 1.5321)
+light_direction_rotation_degrees = (303.617, -91.7351, -269.386)
 
 def normalize_name(name):
     return "".join(character.lower() for character in str(name) if character.isalnum())
@@ -95,6 +101,42 @@ def is_body_1_mesh_object(obj):
     base_name = strip_blender_numeric_suffix(obj.name).lower()
 
     return base_name.endswith("_body_1")
+
+def is_light_direction_object(obj):
+    object_name = strip_blender_numeric_suffix(obj.name).lower()
+    data_name = ""
+
+    if obj.data is not None:
+        data_name = strip_blender_numeric_suffix(obj.data.name).lower()
+
+    if object_name.endswith(" light direction"):
+        return True
+
+    if data_name.endswith(" light direction"):
+        return True
+
+    return False
+
+def update_light_direction_objects():
+    updated_objects = []
+
+    for obj in bpy.data.objects:
+        if is_light_direction_object(obj):
+            obj.location = light_direction_location
+            obj.rotation_mode = "XYZ"
+            obj.rotation_euler = (
+                math.radians(light_direction_rotation_degrees[0]),
+                math.radians(light_direction_rotation_degrees[1]),
+                math.radians(light_direction_rotation_degrees[2]),
+            )
+            updated_objects.append(obj.name)
+
+    try:
+        bpy.context.view_layer.update()
+    except Exception:
+        pass
+
+    return updated_objects
 
 def is_metarig_object(obj):
     if obj.type != "ARMATURE":
@@ -308,7 +350,67 @@ def set_face_shadow_on_modifier(modifier):
 
     return len(updated) > 0, updated
 
-def print_modifier_debug_info(obj, modifier):
+def get_shadow_sharpness_socket_items(node_group):
+    socket_items = []
+    target_name = normalize_name(shadow_sharpness_input_name)
+
+    if hasattr(node_group, "interface") and hasattr(node_group.interface, "items_tree"):
+        for item in node_group.interface.items_tree:
+            item_type = getattr(item, "item_type", None)
+            item_name = getattr(item, "name", "")
+            item_identifier = getattr(item, "identifier", "")
+            item_in_out = getattr(item, "in_out", None)
+            item_socket_type = getattr(item, "socket_type", "")
+
+            if item_type == "SOCKET" and item_identifier:
+                if item_in_out in {None, "INPUT"}:
+                    if normalize_name(item_name) == target_name:
+                        socket_items.append((item_identifier, item_name, item_socket_type))
+
+    if socket_items:
+        return socket_items
+
+    if hasattr(node_group, "inputs"):
+        for socket in node_group.inputs:
+            socket_name = getattr(socket, "name", "")
+            socket_identifier = getattr(socket, "identifier", "")
+            socket_type = getattr(socket, "bl_socket_idname", "")
+
+            if socket_identifier and normalize_name(socket_name) == target_name:
+                socket_items.append((socket_identifier, socket_name, socket_type))
+
+    return socket_items
+
+def set_shadow_sharpness_on_modifier(modifier):
+    if modifier.node_group is None:
+        return False, []
+
+    updated = []
+    socket_items = get_shadow_sharpness_socket_items(modifier.node_group)
+
+    for identifier, socket_name, socket_type in socket_items:
+        try:
+            modifier[identifier] = shadow_sharpness_value
+            updated.append(f"{identifier} = {shadow_sharpness_value}")
+        except Exception as error:
+            print(f"Could not set {socket_name} using {identifier}: {error}")
+
+        try:
+            modifier[f"{identifier}_use_attribute"] = False
+        except Exception:
+            pass
+
+    try:
+        modifier.id_data.update_tag()
+    except Exception:
+        pass
+
+    try:
+        bpy.context.view_layer.update()
+    except Exception:
+        pass
+
+    return len(updated) > 0, updated
     print("Debug info for Geometry Nodes modifier:")
     print(obj.name)
     print(modifier.name)
@@ -379,6 +481,41 @@ def enable_face_shadow_extra_fx():
         pass
 
     return face_objects_found, matching_modifiers_found, updated_face_shadow, missing_modifier_objects, missing_input_modifiers
+
+def set_shadow_sharpness_extra_fx():
+    face_objects_found = []
+    matching_modifiers_found = []
+    updated_sharpness = []
+    missing_modifier_objects = []
+    missing_input_modifiers = []
+
+    for obj in bpy.data.objects:
+        if is_face_mesh_object(obj):
+            face_objects_found.append(obj.name)
+            matching_modifiers = []
+
+            for modifier in obj.modifiers:
+                if modifier_matches_extra_fx(modifier):
+                    matching_modifiers.append(modifier)
+
+            if not matching_modifiers:
+                missing_modifier_objects.append(obj.name)
+
+            for modifier in matching_modifiers:
+                matching_modifiers_found.append(f"{obj.name} -> {modifier.name}")
+                updated, updates = set_shadow_sharpness_on_modifier(modifier)
+
+                if updated:
+                    updated_sharpness.append(f"{obj.name} -> {modifier.name} -> {', '.join(updates)}")
+                else:
+                    missing_input_modifiers.append(f"{obj.name} -> {modifier.name}")
+
+    try:
+        bpy.context.view_layer.update()
+    except Exception:
+        pass
+
+    return face_objects_found, matching_modifiers_found, updated_sharpness, missing_modifier_objects, missing_input_modifiers
 
 def node_matches_combine_uv(node):
     target_name = normalize_name(combine_uv_node_name)
@@ -585,8 +722,11 @@ scene.render.fps = 24
 scene.frame_end = 250
 scene.render.use_border = True
 
+updated_light_direction_objects = update_light_direction_objects()
+
 outline_updated_objects, outline_missing_modifier_objects, body_objects_found = disable_body_outline_modifier()
 face_objects_found, extra_fx_modifiers_found, face_shadow_updated_modifiers, face_missing_modifier_objects, face_missing_input_modifiers = enable_face_shadow_extra_fx()
+sharpness_face_objects_found, sharpness_modifiers_found, sharpness_updated_modifiers, sharpness_missing_modifier_objects, sharpness_missing_input_modifiers = set_shadow_sharpness_extra_fx()
 body_material_objects_found, body_materials_checked, combine_uv_nodes_found, combine_uv_invert_updated, body_missing_material_objects, body_missing_node_materials, combine_uv_missing_invert_inputs = set_body_material_combine_uv_invert_to_zero()
 
 armature = armature_obj.data
@@ -632,6 +772,13 @@ if hidden_head_direction_objects:
         print(object_name)
 else:
     print("No Head Direction objects found.")
+
+if updated_light_direction_objects:
+    print("Light Direction objects updated:")
+    for object_name in updated_light_direction_objects:
+        print(object_name)
+else:
+    print("No object or data ending with Light Direction was found.")
 
 if missing_collections:
     print("These bone collections were not found:")
@@ -695,6 +842,18 @@ if face_missing_input_modifiers:
     for modifier_name in face_missing_input_modifiers:
         print(modifier_name)
 
+if sharpness_updated_modifiers:
+    print("shadow sharpness was set on:")
+    for modifier_name in sharpness_updated_modifiers:
+        print(modifier_name)
+else:
+    print("shadow sharpness was not updated on any matching Extra FX Geonode modifier.")
+
+if sharpness_missing_input_modifiers:
+    print("These matching Extra FX Geonode modifiers did not expose a shadow sharpness input:")
+    for modifier_name in sharpness_missing_input_modifiers:
+        print(modifier_name)
+
 if body_material_objects_found:
     print("_Body_1, _Body_2, or _Body_3 mesh objects found for material Combine UV update:")
     for object_name in body_material_objects_found:
@@ -740,4 +899,5 @@ print("Bone collection visibility updated.")
 print("Frame rate set to 24 fps.")
 print("Frame range end set to 250.")
 print("Render Region enabled.")
+print("Light Direction location and rotation updated.")
 print("Body material Combine UV invert sliders updated.")
