@@ -53,8 +53,14 @@ Credits to the lovely people here who have made the ZZZ setup file. https://disc
   * IK-FK for both arms are toggled on
   * Frame rate is set to 24 fps
   * Render Region is enabled
-  * Adds a camera with a 1920 x 1080 resolution
   * Camera Passepartout is set to `.850`
+* **Facerig:** Adds a facerig based on the shapekeys of the model.
+* **Face Panel Controller:** Recovers controllers for shape keys in the panel if empty.
+* **Thugs Rig:** Generates a rig for Thugs in ZZZ.
+* **Bangboo Rig:** Generates a rig for Bangboos.
+* **Remove Empties:** Remove all stubborn empties except for the Light Direction and Head Direction.
+* **Shaders & Outlines:** Generates shaders and outlines without the rigging process.
+* **Shaders & Outlines No Face:** Generates shaders and outlines for objects without faces. (E.g Pyrois, Bangboos, Jagaers, etc)
  
 ## List
 # Model List
