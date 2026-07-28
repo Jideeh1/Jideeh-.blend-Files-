@@ -7,6 +7,8 @@ SCRIPT_4_TEXT_NAME = "Thugs Rig Script"
 SCRIPT_5_TEXT_NAME = "Face Panel Controllers"
 SCRIPT_6_TEXT_NAME = "Bangboo Rig"
 SCRIPT_7_TEXT_NAME = "Purge Empties"
+SCRIPT_8_TEXT_NAME = "Shaders & Outlines"
+SCRIPT_9_TEXT_NAME = "Shaders & Outlines No Face"
 
 BETTER_FBX_OPERATOR_IDS = [
     "better_import.fbx",
@@ -217,6 +219,38 @@ class JIDEEH_OT_run_remove_empties(bpy.types.Operator):
             self.report({"ERROR"}, str(error))
             raise
 
+class JIDEEH_OT_run_shaders_outlines(bpy.types.Operator):
+    bl_idname = "jideeh.run_shaders_outlines"
+    bl_label = "Shaders & Outlines"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        try:
+            disable_auto_keying()
+            run_text_block(SCRIPT_8_TEXT_NAME)
+            disable_auto_keying()
+            self.report({"INFO"}, f'Ran "{SCRIPT_8_TEXT_NAME}".')
+            return {"FINISHED"}
+        except Exception as error:
+            self.report({"ERROR"}, str(error))
+            raise
+
+class JIDEEH_OT_run_shaders_outlines_no_face(bpy.types.Operator):
+    bl_idname = "jideeh.run_shaders_outlines_no_face"
+    bl_label = "Shaders & Outlines No Face"
+    bl_options = {"REGISTER", "UNDO"}
+
+    def execute(self, context):
+        try:
+            disable_auto_keying()
+            run_text_block(SCRIPT_9_TEXT_NAME)
+            disable_auto_keying()
+            self.report({"INFO"}, f'Ran "{SCRIPT_9_TEXT_NAME}".')
+            return {"FINISHED"}
+        except Exception as error:
+            self.report({"ERROR"}, str(error))
+            raise
+
 class JIDEEH_PT_script_runner_panel(bpy.types.Panel):
     bl_label = "Jideeh Script Runner"
     bl_idname = "JIDEEH_PT_script_runner_panel"
@@ -240,6 +274,8 @@ class JIDEEH_PT_script_runner_panel(bpy.types.Panel):
         layout.operator("jideeh.run_thugs_rig_script", text="Thugs Rig")
         layout.operator("jideeh.run_bangboo_rig", text="Bangboo Rig")
         layout.operator("jideeh.run_remove_empties", text="Remove Empties")
+        layout.operator("jideeh.run_shaders_outlines", text="Shaders & Outlines")
+        layout.operator("jideeh.run_shaders_outlines_no_face", text="Shaders & Outlines No Face")
 
 classes = (
     JIDEEH_OT_run_better_fbx_importer,
@@ -250,6 +286,8 @@ classes = (
     JIDEEH_OT_run_thugs_rig_script,
     JIDEEH_OT_run_bangboo_rig,
     JIDEEH_OT_run_remove_empties,
+    JIDEEH_OT_run_shaders_outlines,
+    JIDEEH_OT_run_shaders_outlines_no_face,
     JIDEEH_PT_script_runner_panel,
 )
 
@@ -263,6 +301,8 @@ def enable_register_on_this_text():
         "jideeh.run_thugs_rig_script",
         "jideeh.run_bangboo_rig",
         "jideeh.run_remove_empties",
+        "jideeh.run_shaders_outlines",
+        "jideeh.run_shaders_outlines_no_face",
         "jideeh.run_better_fbx_importer",
     ]
 
