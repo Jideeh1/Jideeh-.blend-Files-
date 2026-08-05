@@ -141,8 +141,8 @@ Credits to the lovely people here who have made the ZZZ setup file. https://disc
 
 - [festivities](https://github.com/festivities) | Shaders
 - [Just_ScaasI](https://x.com/Just_ScaasI) | Shaders
-- [BonnyAnimations](https://github.com/BonnyAnimations)
-- Aiko
+- [BonnyAnimations](https://github.com/BonnyAnimations) | Shaders
+- Aiko | Shaders
 - [Melioli](https://github.com/Melioli) | HoyoToon CDN
 - [Poke](https://x.com/Enthralpy) | Rigging
 - [Stormz67](https://x.com/stormz67?lang=en) | ZZZ Setup
