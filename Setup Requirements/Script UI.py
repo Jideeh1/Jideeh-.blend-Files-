@@ -757,12 +757,7 @@ def find_bone_owner(bone_name):
     return None
 
 def find_rig_in_armature_collection():
-    collection = bpy.data.collections.get(ARMATURE_COLLECTION_NAME)
-
-    if collection is None:
-        return None
-
-    for obj in collection.all_objects:
+    for obj in bpy.data.objects:
         if obj.type == "ARMATURE" and obj.name.endswith("Rig"):
             return obj
 
@@ -786,7 +781,7 @@ def parent_face_mesh():
     rig = find_rig_in_armature_collection()
 
     if rig is None:
-        raise RuntimeError(f'No armature ending with "Rig" was found in the "{ARMATURE_COLLECTION_NAME}" collection.')
+        raise RuntimeError('No armature ending with "Rig" was found in the blend file.')
 
     if face_fx_obj.data.shape_keys is not None:
         for key_block in face_fx_obj.data.shape_keys.key_blocks:

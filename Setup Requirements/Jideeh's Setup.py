@@ -3,7 +3,6 @@ import math
 
 bone_collections_off = [
     "Light Panel",
-    "Facerig",
     "Main",
     "Torso (Tweak)",
     "Fingers",
