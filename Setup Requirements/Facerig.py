@@ -1290,6 +1290,13 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
             pass
         cb.use_deform = False
         cb.parent = mb
+        try:
+            cb.inherit_scale = 'NONE'
+        except Exception:
+            try:
+                cb.use_inherit_scale = False
+            except Exception:
+                pass
         cb.use_connect = False
         gd = gaze_dirs[eye_name]
         ah = e_heads[eye_name] + gd * offset
@@ -1298,6 +1305,13 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
         ab.tail = ah + gd * blen
         ab.use_deform = False
         ab.parent = cb
+        try:
+            ab.inherit_scale = 'NONE'
+        except Exception:
+            try:
+                ab.use_inherit_scale = False
+            except Exception:
+                pass
         ab.use_connect = False
     bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -1329,13 +1343,25 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
         if not pbe:
             continue
         for con in list(pbe.constraints):
-            if con.name == "CTRL-EyeAim":
+            if con.name in ("CTRL-EyeAim", "CTRL-EyeNoScale", "CTRL-EyeShrink", "CTRL-EyeShrinkM") or con.type == 'COPY_SCALE':
                 pbe.constraints.remove(con)
         con = pbe.constraints.new('DAMPED_TRACK')
         con.name = "CTRL-EyeAim"
         con.target = armature
         con.subtarget = mch_name
         con.track_axis = track_axes[eye_name]
+        lc = pbe.constraints.new('LIMIT_SCALE')
+        lc.name = "CTRL-EyeNoScale"
+        lc.use_min_x = True
+        lc.use_max_x = True
+        lc.use_min_y = True
+        lc.use_max_y = True
+        lc.use_min_z = True
+        lc.use_max_z = True
+        lc.min_x = lc.max_x = 1.0
+        lc.min_y = lc.max_y = 1.0
+        lc.min_z = lc.max_z = 1.0
+        lc.owner_space = "LOCAL"
     bpy.ops.object.mode_set(mode='OBJECT')
 
     fcoll = get_facerig_bone_collection(armature)
@@ -1436,12 +1462,93 @@ def apply_position_overrides(armature):
         b = eb.get(nm)
         if b:
             move(b, None, group_eyes_y, None)
+
+    _EBY = 0.5
+    _EB_L = ("SknEyebrow_02.L", "SknEyebrow_01.L", "SknEyebrow_03.L")
+    _EB_R = ("SknEyebrow_02.R", "SknEyebrow_01.R", "SknEyebrow_03.R")
+    _M_L = ("SknMouth.L", "BdyMouth.L", "BdyMouth_Skin.L", "PTMouth.L")
+    _M_R = ("SknMouth.R", "BdyMouth.R", "BdyMouth_Skin.R", "PTMouth.R")
+    _M_C = ("Skn_M_Mouth", "Bdy_M_Mouth", "Bdy_M_Mouth_Skin", "PT_M_Mouth", "Bn_MouthControl_M")
+
+    def _anchor(names):
+        for _nm in names:
+            _ab = eb.get(_nm)
+            if _ab is not None:
+                return amw @ _ab.tail.copy(), amw @ _ab.head.copy()
+        return None
+
+    def _reanchor(ctrl, names, mouth):
+        _cb = eb.get(ctrl)
+        if _cb is None:
+            return False
+        _tw = _anchor(names)
+        if _tw is None:
+            return False
+        _tail, _head = _tw
+        if mouth:
+            move(_cb, _tail.x, None, _tail.z)
+        else:
+            move(_cb, _tail.x, _tail.y + (_head.y - _tail.y) * _EBY, _tail.z)
+        return True
+
+    _reanchor("CTRL-Mouth-Corner.L", _M_L, True)
+    _reanchor("CTRL-Mouth-Corner.R", _M_R, True)
+    _reanchor("CTRL-Mouth-Viseme-Pad", _M_C, True)
+    _reanchor("CTRL-Mouth-Shift", _M_C, True)
+    _ms = eb.get("CTRL-Mouth-Shift")
+    _msy = (amw @ _ms.head).y if _ms is not None else None
+
+    def _anchor_head(names):
+        for _nm in names:
+            _ab = eb.get(_nm)
+            if _ab is not None:
+                return amw @ _ab.head.copy()
+        return None
+
+    def _eb_place(ctrl, names, ay=True):
+        _cb = eb.get(ctrl)
+        if _cb is None:
+            return
+        _hd = _anchor_head(names)
+        if _hd is not None:
+            move(_cb, _hd.x, _msy if ay else None, _hd.z)
+        elif ay and _msy is not None:
+            move(_cb, None, _msy, None)
+
+    _eb_place("CTRL-SknEyebrow_01.L", ("SknEyebrow_01.L",), False)
+    _eb_place("CTRL-SknEyebrow_01.R", ("SknEyebrow_01.R",), False)
+    _eb_place("CTRL-SknEyebrow_02.L", ("SknEyebrow_02.L",), False)
+    _eb_place("CTRL-SknEyebrow_02.R", ("SknEyebrow_02.R",), False)
+    _eb_place("CTRL-SknEyebrow_03.L", ("SknEyebrow_03.L",), False)
+    _eb_place("CTRL-SknEyebrow_03.R", ("SknEyebrow_03.R",), False)
+    _eb_place("CTRL-Master-Eyebrow.L", _EB_L)
+    _eb_place("CTRL-Master-Eyebrow.R", _EB_R)
+    _eb_place("CTRL-Eyebrow-Viseme-Pad.L", _EB_L)
+    _eb_place("CTRL-Eyebrow-Viseme-Pad.R", _EB_R)
+    _eb_place("CTRL-Brow-L_Up", _EB_L)
+    _eb_place("CTRL-Brow-R_Up", _EB_R)
+    _pb = eb.get("CTRL-Eyebrow-Viseme-Pad")
+    if _pb is not None:
+        _hL = _anchor_head(_EB_L)
+        _hR = _anchor_head(_EB_R)
+        _hc = None
+        if _hL is not None and _hR is not None:
+            _hc = (_hL + _hR) * 0.5
+        elif _hL is not None:
+            _hc = _hL
+        elif _hR is not None:
+            _hc = _hR
+        if _hc is not None:
+            move(_pb, _hc.x, _msy, _hc.z)
+        elif _msy is not None:
+            move(_pb, None, _msy, None)
+
     bpy.ops.object.mode_set(mode='OBJECT')
 
 
 shapekeyrename(keyblock)
 armature, head_name = find_armature_and_head(faceobj)
-for _hn in ("eye.L", "eye.R", "eye.L.001", "eye.R.001", "SknEyeStar.L", "SknEyeStar.R", "Eye Control", "Skn_M_Mouth", "BdyMouth.L", "BdyMouth.R", "Bdy_M_Mouth", "PTMouth.L", "PTMouth.R", "PT_M_Mouth", "Mouth_A", "Mouth_B", "Mouth_C", "Ctr_Up_Teeth", "Ctr_Down_Teeth", "Bn_MouthControl_L", "Bn_MouthControl_R", "Bn_MouthControl_M", "SknEyebrow_01.L", "SknEyebrow_02.L", "SknEyebrow_03.L", "SknEyebrow_01.R", "SknEyebrow_02.R", "SknEyebrow_03.R", "SknMouth.R", "SknMouth.L","Skn_M_Mouth"):
+for _hn in ("eye.L", "eye.R", "eye.L.001", "eye.R.001", "SknEyeStar.L", "SknEyeStar.R", "Eye Control", "Skn_M_Mouth", "BdyMouth.L", "BdyMouth.R", "Bdy_M_Mouth", "PTMouth.L", "PTMouth.R", "PT_M_Mouth", "Mouth_A", "Mouth_B", "Mouth_C", "Ctr_Up_Teeth", "Ctr_Down_Teeth", "SknMouth.L", "SknMouth.R", "SknEyebrow_01.L", "SknEyebrow_01.R", "SknEyebrow_02.L", "SknEyebrow_02.R", "SknEyebrow_03.L", "SknEyebrow_03.R", "Bn_MouthControl_L", "Bn_MouthControl_R", "Bn_MouthControl_M"):
     _hb = armature.data.bones.get(_hn)
     if _hb:
         _hb.hide = True
@@ -1473,6 +1580,45 @@ if CLEAN_REBUILD:
 setup_face_rig(faceobj, controls, armature, head_name, fwd, up, face_size)
 
 setup_lookat_eyes(armature, head_name, fwd, up, face_size)
+
+_kb = faceobj.data.shape_keys.key_blocks if faceobj.data.shape_keys else None
+if _kb is not None:
+    _low = {sk.name.lower(): sk for sk in _kb}
+    def _find_sk(*names):
+        for n in names:
+            if n in _kb:
+                return _kb[n]
+            if n.lower() in _low:
+                return _low[n.lower()]
+        return None
+    for _skn, _ctrl in ((("ShrinkEye.L", "Fac_ShrinkEye.L"), "CTRL-Eye.L"),
+                        (("ShrinkEye.R", "Fac_ShrinkEye.R"), "CTRL-Eye.R")):
+        _sk = _find_sk(*_skn)
+        if _sk is None:
+            continue
+        try:
+            _sk.driver_remove("value")
+        except Exception:
+            pass
+        _sk.slider_min = 0.0
+        _d = _sk.driver_add("value").driver
+        _d.type = 'SCRIPTED'
+        _terms = []
+        for _vn, _cb in (("m", "CTRL-Eye_Master"), ("s", _ctrl), ("e", "Eye Control")):
+            if _cb not in armature.pose.bones:
+                continue
+            _v = _d.variables.new()
+            _v.name = _vn
+            _v.type = 'TRANSFORMS'
+            _t = _v.targets[0]
+            _t.id = armature
+            _t.bone_target = _cb
+            _t.transform_type = 'SCALE_X'
+            _t.transform_space = 'LOCAL_SPACE'
+            _terms.append("((-10*%s)/9 + 10/9)" % _vn)
+        if _terms:
+            _d.expression = _terms[0] if len(_terms) == 1 else "max(" + ", ".join(_terms) + ")"
+
 
 apply_position_overrides(armature)
 
