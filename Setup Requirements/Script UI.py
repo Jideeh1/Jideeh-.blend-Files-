@@ -28,6 +28,7 @@ FACE_FX_COLOR_TAG = "COLOR_05"
 FACE_FX_WIDGET_NAME = "Face FX Widget"
 FACERIG_BONE_COLLECTION = "Facerig"
 ZZZ_FACE_MATERIAL_NAME = "ZZZ Shader Face"
+ZZZ_FACE_MATERIAL_NAME_ALT = "ZZZ Shader Face.001"
 FACE_EFFECT_MATERIAL_NAME = "Face Effect"
 FACE_LIGHTMAP_GROUP_NAME = "Face Lightmap"
 BURAT_GROUP_LABEL = "Burat"
@@ -37,6 +38,19 @@ DEF_SPINE_VERTEX_GROUP = "DEF-spine.006"
 WGTS_COLLECTION_NAME = "WGTS"
 
 OLD_FACE_FX_PROPERTIES = ["Aozameru", "Blush", "Switch FX"]
+
+RETRACT_EYELASH_SHAPE_KEY = "Retract Eyelash"
+RETRACT_EYELASH_Y_OFFSET = 0.057962
+RETRACT_EYELASH_COVER_KEYS = [
+    "Beanie Eyes w/Cover",
+    "Shy Eyes w/Cover",
+    "Speechless w/Cover",
+    "Sunna Shy w/Cover",
+    "Egg Eyes w/Cover",
+    "Dizzy w/Cover",
+    "Dizzy 2 w/Cover",
+    "Star Eyes w/Cover",
+]
 
 LIGHTMAP_GROUPS = [
     (
@@ -412,6 +426,8 @@ def transplant_face_effect(face_effect):
     face_effect.name = ZZZ_FACE_MATERIAL_NAME
 
 def append_face_fx_collection(filepath):
+    original_face_image = capture_original_face_diffuse()
+
     with bpy.data.libraries.load(filepath, link=False) as (data_from, data_to):
         if FACE_FX_COLLECTION_NAME not in data_from.collections:
             raise RuntimeError(f'No collection named "{FACE_FX_COLLECTION_NAME}" was found in {filepath}.')
@@ -447,7 +463,8 @@ def append_face_fx_collection(filepath):
 
     exclude_collection_from_view_layer(WGTS_COLLECTION_NAME)
     insert_face_lightmap_node()
-    fill_face_texture()
+    fill_face_texture(original_face_image)
+    fill_face_texture(original_face_image, ZZZ_FACE_MATERIAL_NAME_ALT)
 
     return linked.name
 
@@ -540,8 +557,28 @@ def find_face_diffuse_image():
 
     return None
 
-def fill_face_texture():
+def capture_original_face_diffuse():
     material = bpy.data.materials.get(ZZZ_FACE_MATERIAL_NAME)
+
+    if material is not None and material.node_tree is not None:
+        burat = find_node_by_name(material.node_tree, BURAT_GROUP_LABEL)
+
+        if burat is not None and getattr(burat, "node_tree", None) is not None:
+            for node in burat.node_tree.nodes:
+                if node.type == "TEX_IMAGE" and node.image is not None and (normalize_name(node.name) == "faced" or normalize_name(getattr(node, "label", "")) == "faced"):
+                    return node.image
+
+            for node in burat.node_tree.nodes:
+                if node.type == "TEX_IMAGE" and node.image is not None:
+                    return node.image
+
+    return find_face_diffuse_image()
+
+def fill_face_texture(preferred_image=None, material_name=None):
+    if material_name is None:
+        material_name = ZZZ_FACE_MATERIAL_NAME
+
+    material = bpy.data.materials.get(material_name)
 
     if material is None or material.node_tree is None:
         return
@@ -549,10 +586,10 @@ def fill_face_texture():
     burat = find_node_by_name(material.node_tree, BURAT_GROUP_LABEL)
 
     if burat is None or getattr(burat, "node_tree", None) is None:
-        print(f'Group node "{BURAT_GROUP_LABEL}" was not found in "{ZZZ_FACE_MATERIAL_NAME}".')
+        print(f'Group node "{BURAT_GROUP_LABEL}" was not found in "{material_name}".')
         return
 
-    image = find_face_diffuse_image()
+    image = preferred_image if preferred_image is not None else find_face_diffuse_image()
 
     if image is None:
         print('No image ending with "_Face_D.png" was found to fill the face texture.')
@@ -572,7 +609,7 @@ def fill_face_texture():
                 break
 
     if target is None:
-        print(f'No Face_D image node was found inside "{BURAT_GROUP_LABEL}".')
+        print(f'No Face_D image node was found inside "{BURAT_GROUP_LABEL}" of "{material_name}".')
         return
 
     target.image = image
@@ -772,7 +809,47 @@ def find_face_fx_mesh():
 
     return None
 
-def parent_face_mesh():
+def build_eyelash_retract_keys(eyelash_obj):
+    if eyelash_obj is None or eyelash_obj.type != "MESH":
+        raise RuntimeError("Select the separated eyelash mesh first.")
+
+    mesh = eyelash_obj.data
+
+    if mesh.shape_keys is None:
+        eyelash_obj.shape_key_add(name="Basis", from_mix=False)
+
+    key_blocks = mesh.shape_keys.key_blocks
+
+    existing = key_blocks.get(RETRACT_EYELASH_SHAPE_KEY)
+
+    if existing is not None:
+        eyelash_obj.shape_key_remove(existing)
+
+    retract = eyelash_obj.shape_key_add(name=RETRACT_EYELASH_SHAPE_KEY, from_mix=False)
+
+    for point in retract.data:
+        point.co.y += RETRACT_EYELASH_Y_OFFSET
+
+    retract.slider_min = 0.0
+    retract.slider_max = 1.0
+    retract.value = 0.0
+
+    for name in RETRACT_EYELASH_COVER_KEYS:
+        target = key_blocks.get(name)
+
+        if target is None:
+            target = eyelash_obj.shape_key_add(name=name, from_mix=False)
+
+        for index, point in enumerate(target.data):
+            point.co = retract.data[index].co.copy()
+
+        target.slider_min = 0.0
+        target.slider_max = 1.0
+        target.value = 0.0
+
+    return len(RETRACT_EYELASH_COVER_KEYS)
+
+def parent_face_mesh(eyelash_obj=None):
     face_fx_obj = find_face_fx_mesh()
 
     if face_fx_obj is None:
@@ -783,6 +860,11 @@ def parent_face_mesh():
     if rig is None:
         raise RuntimeError('No armature ending with "Rig" was found in the blend file.')
 
+    valid_eyelash = None
+
+    if eyelash_obj is not None and eyelash_obj.type == "MESH" and eyelash_obj is not face_fx_obj and not eyelash_obj.name.endswith(FACE_MESH_SUFFIX):
+        valid_eyelash = eyelash_obj
+
     if face_fx_obj.data.shape_keys is not None:
         for key_block in face_fx_obj.data.shape_keys.key_blocks:
             key_block.value = 0.0
@@ -792,6 +874,9 @@ def parent_face_mesh():
             bpy.ops.object.mode_set(mode="OBJECT")
         except Exception:
             pass
+
+    if valid_eyelash is not None:
+        build_eyelash_retract_keys(valid_eyelash)
 
     bpy.ops.object.select_all(action="DESELECT")
     face_fx_obj.select_set(True)
@@ -821,6 +906,20 @@ def parent_face_mesh():
             print("Face FX join failed:", error)
     else:
         print(f'No mesh ending with "{FACE_MESH_SUFFIX}" was found to join into.')
+
+    if valid_eyelash is not None:
+        if face_obj is not None and face_obj is not valid_eyelash:
+            bpy.ops.object.select_all(action="DESELECT")
+            try:
+                valid_eyelash.select_set(True)
+                face_obj.select_set(True)
+                bpy.context.view_layer.objects.active = face_obj
+                bpy.ops.object.join()
+                result_name = face_obj.name
+            except Exception as error:
+                print("Eyelash join failed:", error)
+        else:
+            print(f'No mesh ending with "{FACE_MESH_SUFFIX}" was found to join the eyelash into.')
 
     owner = find_bone_owner(FACE_EXPRESSIONS_BONE)
 
@@ -1055,7 +1154,8 @@ class JIDEEH_OT_parent_face_mesh(bpy.types.Operator):
 
     def execute(self, context):
         try:
-            owner_name = parent_face_mesh()
+            eyelash_obj = context.active_object
+            owner_name = parent_face_mesh(eyelash_obj)
             self.report({"INFO"}, f'Child Of constraint set on "{FACE_EXPRESSIONS_BONE}" ({owner_name}).')
             return {"FINISHED"}
         except Exception as error:

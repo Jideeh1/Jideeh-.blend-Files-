@@ -59,16 +59,6 @@ elif ver[0] == '3':
 else:
     raise Exception("This script targets Blender 3.x or 4.x.")
 
-_sel_arm = None
-_ao = bpy.context.view_layer.objects.active
-if _ao is not None and _ao.type == 'ARMATURE':
-    _sel_arm = _ao
-if _sel_arm is None:
-    for _o in bpy.context.selected_objects:
-        if _o.type == 'ARMATURE':
-            _sel_arm = _o
-            break
-
 faceobj = None
 for obj in bpy.data.objects:
     n = obj.name.lower()
@@ -174,10 +164,19 @@ def shapekeyrename(keyblock):
             sk.name = sk.name[:-4]
 
 
-def find_armature_and_head(mesh_obj, preferred=None):
-    armature = preferred if (preferred is not None and preferred.type == 'ARMATURE') else None
+def find_armature_and_head(mesh_obj):
+    armature = None
+    for m in mesh_obj.modifiers:
+        if m.type == 'ARMATURE' and m.object:
+            armature = m.object
+            break
     if armature is None:
-        raise Exception("Select the armature you want the face rig generated on, then run the script.")
+        for o in bpy.data.objects:
+            if o.type == 'ARMATURE':
+                armature = o
+                break
+    if armature is None:
+        raise Exception("No armature found to attach the face rig to.")
 
     names = [HEAD_BONE_NAME] if HEAD_BONE_NAME else []
     names += HEAD_CANDIDATES
@@ -1549,7 +1548,7 @@ def apply_position_overrides(armature):
 
 
 shapekeyrename(keyblock)
-armature, head_name = find_armature_and_head(faceobj, _sel_arm)
+armature, head_name = find_armature_and_head(faceobj)
 for _hn in ("eye.L", "eye.R", "eye.L.001", "eye.R.001", "SknEyeStar.L", "SknEyeStar.R", "Eye Control", "Skn_M_Mouth", "BdyMouth.L", "BdyMouth.R", "Bdy_M_Mouth", "PTMouth.L", "PTMouth.R", "PT_M_Mouth", "Mouth_A", "Mouth_B", "Mouth_C", "Ctr_Up_Teeth", "Ctr_Down_Teeth", "SknMouth.L", "SknMouth.R", "SknEyebrow_01.L", "SknEyebrow_01.R", "SknEyebrow_02.L", "SknEyebrow_02.R", "SknEyebrow_03.L", "SknEyebrow_03.R", "Bn_MouthControl_L", "Bn_MouthControl_R", "Bn_MouthControl_M"):
     _hb = armature.data.bones.get(_hn)
     if _hb:
